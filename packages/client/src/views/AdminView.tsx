@@ -8,6 +8,7 @@ import {
   deleteSession,
   exportCsvUrl,
   exportJsonUrl,
+  updateSessionSettings,
 } from '../lib/api'
 import type { AdminOverview, AnalysisData } from '../lib/api'
 import { useLang } from '../lib/i18n'
@@ -31,6 +32,7 @@ export function AdminView({ adminKey }: { adminKey: string }) {
   const [error, setError] = useState(false)
   const [deleted, setDeleted] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [settingsBusy, setSettingsBusy] = useState(false)
 
   /**
    * Reloads the overview and, for a closed session, the analysis.
@@ -133,6 +135,23 @@ export function AdminView({ adminKey }: { adminKey: string }) {
   }
 
   /**
+   * Toggles the requiresStudentId setting for the session.
+   *
+   * @returns {Promise<void>}
+   */
+  async function onToggleRequiresStudentId() {
+    if (!data) return
+    setSettingsBusy(true)
+    try {
+      const newSetting = !data.session.requiresStudentId
+      await updateSessionSettings(adminKey, { requiresStudentId: newSetting })
+      await refresh()
+    } finally {
+      setSettingsBusy(false)
+    }
+  }
+
+  /**
    * Deletes the session with all submissions after confirmation.
    *
    * @returns {Promise<void>}
@@ -174,6 +193,14 @@ export function AdminView({ adminKey }: { adminKey: string }) {
         )}
         <button type="button" className="ghost" onClick={() => void refresh()}>
           {t.dash.refresh}
+        </button>
+        <button
+          type="button"
+          className="ghost"
+          disabled={settingsBusy}
+          onClick={() => void onToggleRequiresStudentId()}
+        >
+          {s.requiresStudentId ? 'Schüler:innen-ID deaktivieren' : 'Schüler:innen-ID aktivieren'}
         </button>
         <button type="button" className="danger" onClick={() => void onDelete()}>
           {t.admin.remove}

@@ -20,6 +20,7 @@ import { withMeta } from '../csv'
  * @property {string} ml_vorwissen Prior ML knowledge.
  * @property {string | null} bundesland Federal state.
  * @property {string | null} note Teacher's note.
+ * @property {number} requires_student_id Whether student ID is required for submissions.
  * @property {string} created_at ISO creation timestamp.
  * @property {string} updated_at ISO timestamp of the last change.
  */
@@ -35,6 +36,7 @@ interface SessionRow {
   ml_vorwissen: string
   bundesland: string | null
   note: string | null
+  requires_student_id: number
   created_at: string
   updated_at: string
 }
@@ -49,7 +51,7 @@ function findSessionByAdminKey(adminKey: string): SessionRow | undefined {
   return db
     .prepare(
       `SELECT id, session_key, admin_key, status, closed_at, card_set_version, klassenstufe,
-              schulform, ml_vorwissen, bundesland, note, created_at, updated_at
+              schulform, ml_vorwissen, bundesland, note, requires_student_id, created_at, updated_at
        FROM sessions WHERE admin_key = ? COLLATE NOCASE`,
     )
     .get(adminKey) as SessionRow | undefined
@@ -74,6 +76,7 @@ function publicSession(s: SessionRow) {
     mlVorwissen: s.ml_vorwissen,
     bundesland: s.bundesland,
     note: s.note,
+    requiresStudentId: s.requires_student_id === 1,
     createdAt: s.created_at,
     updatedAt: s.updated_at,
   }
@@ -91,7 +94,7 @@ const INCLUDED = '(? IS NULL OR created_at <= ?)'
 function includedRows(s: SessionRow): SubmissionRow[] {
   return db
     .prepare(
-      `SELECT participant_no, state_json, created_at, updated_at FROM submissions
+      `SELECT participant_no, state_json, student_id, created_at, updated_at FROM submissions
        WHERE session_id = ? AND ${INCLUDED} ORDER BY participant_no`,
     )
     .all(s.id, s.closed_at, s.closed_at) as unknown as SubmissionRow[]
@@ -279,6 +282,25 @@ export const adminRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
         "UPDATE sessions SET closed_at = NULL, status = 'open', updated_at = ? WHERE id = ?",
       ).run(now, s.id)
       return { closedAt: null }
+    },
+  )
+
+  /**
+   * POST /api/admin/:adminKey/settings — updates session settings.
+   *
+   * @returns {object} `{ ok: true, requiresStudentId: boolean }`.
+   */
+  app.post<{ Params: { adminKey: string }; Body: { requiresStudentId?: boolean } }>(
+    '/api/admin/:adminKey/settings',
+    async (req, reply) => {
+      const s = findSessionByAdminKey(req.params.adminKey)
+      if (!s) return reply.code(404).send({ error: 'not_found' })
+      const requiresStudentId = req.body.requiresStudentId ?? false
+      const now = new Date().toISOString()
+      db.prepare(
+        'UPDATE sessions SET requires_student_id = ?, updated_at = ? WHERE id = ?',
+      ).run(requiresStudentId ? 1 : 0, now, s.id)
+      return { ok: true, requiresStudentId }
     },
   )
 

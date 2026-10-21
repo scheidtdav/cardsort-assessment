@@ -9,11 +9,12 @@ import type {
   GroupInteractionMode,
   Rect,
   ResizeDir,
+  SortState,
 } from '../lib/types'
 import { localizeCards } from '../lib/cards'
 import { LANGS, useLang } from '../lib/i18n'
 import { CARD_SIZE, GROUP_COLORS, MIN_FRAME_SIZE, SOURCE_URL, WORLD } from '../lib/config'
-import { ApiError, submitSorting } from '../lib/api'
+import { ApiError, getSession, submitSorting } from '../lib/api'
 import { clearReceipt, getReceipt, setReceipt } from '../lib/receipt'
 import { clearDraft, loadDraft, saveDraft } from '../lib/draft'
 import { DEFAULT_SESSION_KEY } from '@sortiertool/shared/constants'
@@ -151,6 +152,15 @@ interface PanStart {
  */
 interface SortingViewProps {
   sessionKey: string
+}
+
+/**
+ * Session information including whether student ID is required.
+ */
+interface SessionInfo {
+  status: 'open' | 'closed'
+  cardSetVersion: string
+  requiresStudentId: boolean
 }
 
 /**
@@ -393,10 +403,30 @@ function ageInMinutes(savedAt: string): number {
 export function SortingView({ sessionKey }: SortingViewProps) {
   const { lang, setLang, t } = useLang()
   const cards = useMemo(() => localizeCards(cardSources, lang), [lang])
+  const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(sessionKey === DEFAULT_SESSION_KEY ? { status: 'open', cardSetVersion: '1', requiresStudentId: false } : null)
+  const [sessionLoading, setSessionLoading] = useState(sessionKey !== DEFAULT_SESSION_KEY)
+  const [sessionError, setSessionError] = useState<string | null>(null)
+  const [studentId, setStudentId] = useState('')
+  const [showStudentIdModal, setShowStudentIdModal] = useState(false)
 
   // Lazy initializer instead of an effect: otherwise the empty start state would render first
   // and the autosave could write it over the stored draft.
   const [restored] = useState(() => loadDraft(sessionKey, CARD_IDS))
+
+  // Fetch session info on mount
+  useEffect(() => {
+    const fetchSessionInfo = async () => {
+      try {
+        const info = await getSession(sessionKey)
+        setSessionInfo(info)
+      } catch {
+        setSessionError('Session not found')
+      } finally {
+        setSessionLoading(false)
+      }
+    }
+    fetchSessionInfo()
+  }, [sessionKey])
 
   const [placements, setPlacements] = useState<CardPlacement[]>(
     () => restored?.placements ?? initialPlacements(),
@@ -1208,7 +1238,11 @@ export function SortingView({ sessionKey }: SortingViewProps) {
    */
   const handleSubmit = useCallback(async () => {
     if (msgTimerRef.current) clearTimeout(msgTimerRef.current)
-
+    // Show student ID modal if required and not yet provided
+    if (sessionInfo?.requiresStudentId && !studentId.trim() && !showStudentIdModal) {
+      setShowStudentIdModal(true)
+      return
+    }
     const ungrouped = placements.filter((p) => p.groupId === null).length
     if (ungrouped > 0) {
       setSubmitMsg({ text: t.sort.msg.ungrouped(ungrouped), kind: 'error' })
@@ -1228,10 +1262,14 @@ export function SortingView({ sessionKey }: SortingViewProps) {
 
     try {
       // Trim names, otherwise " " would count as a name in the analysis.
-      const state = toRelativeState(
+      const state: SortState = toRelativeState(
         { placements, groups: groups.map((g) => ({ ...g, name: g.name.trim() })), lang },
         WORLD,
       )
+      // Add studentId if provided
+      if (studentId.trim()) {
+        state.studentId = studentId.trim()
+      }
       const res = await submitSorting(sessionKey, state, getReceipt(sessionKey))
       if (res.receipt) setReceipt(sessionKey, res.receipt)
 
@@ -1253,7 +1291,7 @@ export function SortingView({ sessionKey }: SortingViewProps) {
     }
 
     msgTimerRef.current = window.setTimeout(() => setSubmitMsg(null), 4000)
-  }, [placements, groups, sessionKey, lang, t])
+  }, [placements, groups, sessionKey, lang, t, studentId, showStudentIdModal, sessionInfo])
 
   /**
    * Resets the board to the start state and drops receipt and draft of this session.
@@ -1282,6 +1320,7 @@ export function SortingView({ sessionKey }: SortingViewProps) {
   const resetForNextParticipant = useCallback(() => {
     clearBoard()
     setHandover('none')
+    setStudentId('')
     setSubmitMsg({ text: t.sort.msg.readyForNext, kind: 'success' })
     if (msgTimerRef.current) clearTimeout(msgTimerRef.current)
     msgTimerRef.current = window.setTimeout(() => setSubmitMsg(null), 4000)
@@ -1434,6 +1473,54 @@ export function SortingView({ sessionKey }: SortingViewProps) {
 
   return (
     <main className="app">
+      {sessionError && (
+        <div className="page">
+          <p className="error">{sessionError}</p>
+          <p className="links">
+            <a href="/?beitreten">Zurück zur Sitzungsauswahl</a>
+          </p>
+        </div>
+      )}
+      {sessionLoading && (
+        <div className="page">
+          <p>{t.sort.loading}...</p>
+        </div>
+      )}
+      {showStudentIdModal && sessionInfo?.requiresStudentId && (
+        <div className="resume" role="dialog" aria-modal="true" aria-labelledby="student-id-title">
+          <div className="resume__box">
+            <h2 className="resume__title" id="student-id-title">
+              Schüler:innen-ID/Pseudonym
+            </h2>
+            <p className="resume__text">
+              Bitte gib deine Schüler:innen-ID oder ein Pseudonym ein, um dein Ergebnis abzuschicken.
+            </p>
+            <div className="resume__actions">
+              <input
+                type="text"
+                value={studentId}
+                onChange={(e) => setStudentId(e.target.value)}
+                placeholder="Deine ID"
+                autoFocus
+                className="student-id-input"
+              />
+              <button
+                type="button"
+                className="btn-submit"
+                onClick={() => {
+                  if (studentId.trim()) {
+                    setShowStudentIdModal(false)
+                    handleSubmit()
+                  }
+                }}
+                disabled={!studentId.trim()}
+              >
+                Weiter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {resumeAsk && restored && (
         <div className="resume" role="dialog" aria-modal="true" aria-labelledby="resume-title">
           <div className="resume__box">

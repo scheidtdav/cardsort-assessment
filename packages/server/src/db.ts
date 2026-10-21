@@ -12,7 +12,7 @@ import { DEFAULT_SESSION_KEY } from '@sortiertool/shared/constants'
  */
 
 /** Current schema version; bump on every schema change and add an `if (schemaVersion < N)` step. */
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 mkdirSync(dirname(DB_PATH), { recursive: true })
 
@@ -34,6 +34,7 @@ db.exec(`
     ml_vorwissen     TEXT NOT NULL,
     bundesland       TEXT,
     note             TEXT,
+    requires_student_id INTEGER NOT NULL DEFAULT 0,
     created_at       TEXT NOT NULL,
     updated_at       TEXT NOT NULL
   );
@@ -47,6 +48,7 @@ db.exec(`
     participant_no INTEGER NOT NULL,
     receipt_id     TEXT NOT NULL UNIQUE,
     state_json     TEXT NOT NULL,
+    student_id     TEXT,
     created_at     TEXT NOT NULL,
     updated_at     TEXT NOT NULL,
     UNIQUE(session_id, participant_no)
@@ -90,6 +92,20 @@ function readSchemaVersion(): number {
 }
 
 /**
+ * v2 → v3: adds student_id tracking with optional requirement per session.
+ *
+ * @returns {void}
+ */
+function migrateToV3(): void {
+  db.exec(`
+    BEGIN;
+    ALTER TABLE sessions ADD COLUMN requires_student_id INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE submissions ADD COLUMN student_id TEXT;
+    COMMIT;
+  `)
+}
+
+/**
  * v1 → v2: replaces the device token (linkable across sessions) by a per-session sequential
  * `participant_no` in order of first submission, and issues fresh receipts.
  *
@@ -125,6 +141,7 @@ function migrateToV2(): void {
 /** Schema version of the opened database before migrating. */
 const schemaVersion = readSchemaVersion()
 if (schemaVersion < 2) migrateToV2()
+if (schemaVersion < 3) migrateToV3()
 
 db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(
   'schema_version',

@@ -91,6 +91,11 @@ export function SubmissionDetail({
             {t.ana.subs.close}
           </button>
         </div>
+        {submission.studentId && (
+          <p className="muted">
+            {t.ana.subs.col.studentId}: <strong>{submission.studentId}</strong>
+          </p>
+        )}
 
         <h3>{t.ana.subs.sorting}</h3>
         {colorSchema && <p className="muted">{t.ana.subs.colorNote(colorSchema.label[lang])}</p>}

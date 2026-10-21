@@ -29,6 +29,7 @@ export interface CreatedSession {
  * @property {string} [bundesland] Federal state.
  * @property {string} [note] Free note.
  * @property {string} [adminKey] Self-chosen admin key; empty = the server generates one.
+ * @property {boolean} [requiresStudentId] Whether student ID is required for submissions.
  */
 export interface ClassInfo {
   klassenstufe: string
@@ -37,6 +38,7 @@ export interface ClassInfo {
   bundesland?: string
   note?: string
   adminKey?: string
+  requiresStudentId?: boolean
 }
 
 /**
@@ -53,6 +55,7 @@ export interface ClassInfo {
  * @property {string} mlVorwissen Prior ML knowledge.
  * @property {string | null} bundesland Federal state.
  * @property {string | null} note Free note.
+ * @property {boolean} requiresStudentId Whether student ID is required for submissions.
  * @property {string} createdAt ISO creation time.
  * @property {string} updatedAt ISO time of the last change.
  */
@@ -68,6 +71,7 @@ export interface AdminSession {
   mlVorwissen: string
   bundesland: string | null
   note: string | null
+  requiresStudentId: boolean
   createdAt: string
   updatedAt: string
 }
@@ -159,10 +163,12 @@ export async function createSession(info: ClassInfo): Promise<CreatedSession> {
  *
  * @property {'open' | 'closed'} status Whether submissions still count.
  * @property {string} cardSetVersion Card-set version of the session.
+ * @property {boolean} requiresStudentId Whether student ID is required for submissions.
  */
 export interface PublicSession {
   status: 'open' | 'closed'
   cardSetVersion: string
+  requiresStudentId: boolean
 }
 
 /**
@@ -286,6 +292,36 @@ export async function deleteSession(adminKey: string): Promise<void> {
     method: 'DELETE',
   })
   if (!res.ok) throw new Error(String(res.status))
+}
+
+/**
+ * Settings update for a session.
+ *
+ * @property {boolean} [requiresStudentId] Whether student ID is required for submissions.
+ */
+export interface SessionSettings {
+  requiresStudentId?: boolean
+}
+
+/**
+ * `POST /api/admin/:adminKey/settings` — updates session settings.
+ *
+ * @param {string} adminKey Admin key.
+ * @param {SessionSettings} settings Settings to update.
+ * @returns {Promise<{ ok: true; requiresStudentId: boolean }>} Confirmation with updated setting.
+ * @throws {Error} With the status code as message on failure.
+ */
+export async function updateSessionSettings(
+  adminKey: string,
+  settings: SessionSettings,
+): Promise<{ ok: true; requiresStudentId: boolean }> {
+  const res = await fetch(`${BASE}/api/admin/${encodeURIComponent(adminKey)}/settings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  })
+  if (!res.ok) throw new Error(String(res.status))
+  return (await res.json()) as { ok: true; requiresStudentId: boolean }
 }
 
 /** CSV exports: aggregate matrix, metrics per submission, group names. */

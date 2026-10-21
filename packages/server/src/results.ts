@@ -38,12 +38,14 @@ export function aggregateCsvFromStates(stateJsons: string[]): string {
  * @property {string} state_json Serialized {@link SortState}.
  * @property {string} created_at ISO timestamp of the first submission.
  * @property {string} updated_at ISO timestamp of the last update.
+ * @property {string | null} student_id Optional student identifier/pseudonym.
  */
 export interface SubmissionRow {
   participant_no: number
   state_json: string
   created_at: string
   updated_at: string
+  student_id: string | null
 }
 
 /**
@@ -62,6 +64,7 @@ export function analysisFromRows(rows: SubmissionRow[], withNameTypes = false): 
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       state: JSON.parse(r.state_json) as SortState,
+      studentId: r.student_id,
     })),
     withNameTypes ? nameMarkers : undefined,
   )

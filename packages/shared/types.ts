@@ -167,10 +167,12 @@ export interface CardPlacement {
  * @property {Group[]} groups Group frames.
  * @property {CanvasSize} canvas Size of the work surface.
  * @property {Lang} [lang] Language sorted in; missing in old submissions = German.
+ * @property {string} [studentId] Optional student identifier/pseudonym.
  */
 export interface SortState {
   placements: CardPlacement[]
   groups: Group[]
   canvas: CanvasSize
   lang?: Lang
+  studentId?: string
 }

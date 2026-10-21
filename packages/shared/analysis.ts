@@ -521,6 +521,7 @@ export interface SchemaResult extends PairAgreement {
  * @property {string} createdAt Time of the first submission.
  * @property {string} updatedAt Time of the last update.
  * @property {Lang | null} lang Language sorted in; `null` = old submission (German).
+ * @property {string | null} studentId Optional student identifier/pseudonym.
  * @property {SubmissionGroups} groups Cards by group.
  * @property {number} groupCount Frames with at least one card.
  * @property {Record<string, SchemaResult>} schemas Metrics per usable schema.
@@ -532,6 +533,7 @@ export interface SubmissionAnalysis {
   createdAt: string
   updatedAt: string
   lang: Lang | null
+  studentId: string | null
   groups: SubmissionGroups
   groupCount: number
   schemas: Record<string, SchemaResult>
@@ -581,12 +583,14 @@ export interface SessionAnalysis {
  * @property {string} createdAt Time of the first submission.
  * @property {string} updatedAt Time of the last update.
  * @property {SortState} state Submitted sort state.
+ * @property {string | null} [studentId] Optional student identifier/pseudonym.
  */
 export interface SubmissionInput {
   participantNo: number
   createdAt: string
   updatedAt: string
   state: SortState
+  studentId?: string | null
 }
 
 /**
@@ -634,6 +638,7 @@ export function analyzeSession(
       createdAt: sub.createdAt,
       updatedAt: sub.updatedAt,
       lang: sub.state.lang ?? null,
+      studentId: sub.studentId ?? null,
       groups,
       groupCount: groups.groups.filter((g) => g.cardIds.length > 0).length,
       schemas: results,

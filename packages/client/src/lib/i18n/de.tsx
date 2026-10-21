@@ -77,6 +77,7 @@ export const de = {
     resetAsk: 'Alles zurücksetzen?',
     resetConfirm: 'Ja, zurücksetzen',
     cancel: 'Abbrechen',
+    loading: 'Lädt...',
 
     msg: {
       /**
@@ -636,6 +637,7 @@ export const de = {
         no: 'Nr.',
         time: 'Zeitpunkt',
         groups: 'Gruppen',
+        studentId: 'Schüler:innen-ID',
         best: 'am nächsten an',
         lead: 'Score',
         lang: 'Sprache',

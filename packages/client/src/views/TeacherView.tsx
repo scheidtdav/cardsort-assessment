@@ -39,6 +39,7 @@ export function TeacherView() {
   const [note, setNote] = useState('')
   const [eigenerKey, setEigenerKey] = useState(false)
   const [adminKey, setAdminKey] = useState('')
+  const [requiresStudentId, setRequiresStudentId] = useState(false)
   const [result, setResult] = useState<CreatedSession | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -62,6 +63,7 @@ export function TeacherView() {
         bundesland: bundesland || undefined,
         note: note || undefined,
         adminKey: (eigenerKey && adminKey.trim()) || undefined,
+        requiresStudentId,
       })
       setResult(created)
     } catch (err) {
@@ -163,6 +165,14 @@ export function TeacherView() {
             onChange={(e) => setEigenerKey(e.target.checked)}
           />
           Verwaltungsschlüssel selbst wählen (sonst erzeugt der Server einen sicheren)
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={requiresStudentId}
+            onChange={(e) => setRequiresStudentId(e.target.checked)}
+          />
+          Schüler:innen-ID/Pseudonym erforderlich (für individuelle Auswertung)
         </label>
         {eigenerKey && (
           <label>

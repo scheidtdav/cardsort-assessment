@@ -18,6 +18,7 @@ import { CARD_SET_VERSION } from '../cards'
  * @property {string} [bundesland] Federal state.
  * @property {string} [note] Free-text note of the teacher.
  * @property {string} [adminKey] Self-chosen admin key; generated if empty.
+ * @property {boolean} [requiresStudentId] Whether student ID is required for submissions.
  */
 interface CreateBody {
   klassenstufe: string
@@ -26,6 +27,7 @@ interface CreateBody {
   bundesland?: string
   note?: string
   adminKey?: string
+  requiresStudentId?: boolean
 }
 
 /** Fastify validation schema of {@link CreateBody}. */
@@ -41,6 +43,7 @@ const createSchema = {
       bundesland: { type: 'string' },
       note: { type: 'string' },
       adminKey: { type: 'string' },
+      requiresStudentId: { type: 'boolean' },
     },
   },
 }
@@ -50,10 +53,12 @@ const createSchema = {
  *
  * @property {string} [receipt] Receipt of an earlier own submission; missing on first submit.
  * @property {unknown} state Sort state in relative coordinates, validated by the schema.
+ * @property {string} [studentId] Student identifier/pseudonym; required if session requires it.
  */
 interface SubmitBody {
   receipt?: string
   state: unknown
+  studentId?: string
 }
 
 /** Fastify validation schema of {@link SubmitBody} including the full `SortState`. */
@@ -64,6 +69,7 @@ const submitSchema = {
     additionalProperties: false,
     properties: {
       receipt: { type: 'string', minLength: 1 },
+      studentId: { type: 'string', minLength: 1 },
       state: {
         type: 'object',
         required: ['placements', 'groups', 'canvas'],
@@ -72,6 +78,7 @@ const submitSchema = {
           // New SortState fields MUST be added here: `additionalProperties: false` silently
           // drops unknown fields.
           lang: { type: 'string', enum: ['de', 'en'] },
+          studentId: { type: 'string', minLength: 1 },
           canvas: {
             type: 'object',
             required: ['width', 'height'],
@@ -137,7 +144,7 @@ export const sessionRoutes: FastifyPluginAsync = async (app: FastifyInstance) =>
     '/api/sessions',
     { schema: createSchema },
     async (req, reply) => {
-      const { klassenstufe, schulform, mlVorwissen, bundesland, note } = req.body
+      const { klassenstufe, schulform, mlVorwissen, bundesland, note, requiresStudentId } = req.body
       const id = randomUUID()
       const now = new Date().toISOString()
 
@@ -170,9 +177,9 @@ export const sessionRoutes: FastifyPluginAsync = async (app: FastifyInstance) =>
 
       db.prepare(
         `INSERT INTO sessions
-           (id, session_key, admin_key, status, card_set_version,
-            klassenstufe, schulform, ml_vorwissen, bundesland, note, created_at, updated_at)
-         VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, session_key, admin_key, status, card_set_version,
+            klassenstufe, schulform, ml_vorwissen, bundesland, note, requires_student_id, created_at, updated_at)
+        VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         id,
         sessionKey,
@@ -183,6 +190,7 @@ export const sessionRoutes: FastifyPluginAsync = async (app: FastifyInstance) =>
         mlVorwissen,
         bundesland ?? null,
         note ?? null,
+        requiresStudentId ? 1 : 0,
         now,
         now,
       )
@@ -194,18 +202,18 @@ export const sessionRoutes: FastifyPluginAsync = async (app: FastifyInstance) =>
   /**
    * GET /api/sessions/:key — checks a session key before joining.
    *
-   * @returns {object} `{ status, cardSetVersion }`; `404 not_found`.
+   * @returns {object} `{ status, cardSetVersion, requiresStudentId }`; `404 not_found`.
    */
   app.get<{ Params: { key: string } }>(
     '/api/sessions/:key',
     async (req, reply) => {
       const row = db
-        .prepare('SELECT status, card_set_version FROM sessions WHERE session_key = ?')
+        .prepare('SELECT status, card_set_version, requires_student_id FROM sessions WHERE session_key = ?')
         .get(req.params.key) as
-        | { status: string; card_set_version: string }
+        | { status: string; card_set_version: string; requires_student_id: number }
         | undefined
       if (!row) return reply.code(404).send({ error: 'not_found' })
-      return { status: row.status, cardSetVersion: row.card_set_version }
+      return { status: row.status, cardSetVersion: row.card_set_version, requiresStudentId: row.requires_student_id === 1 }
     },
   )
 
@@ -225,9 +233,20 @@ export const sessionRoutes: FastifyPluginAsync = async (app: FastifyInstance) =>
     { schema: submitSchema },
     async (req, reply) => {
       const session = db
-        .prepare('SELECT id, closed_at FROM sessions WHERE session_key = ?')
-        .get(req.params.key) as { id: string; closed_at: string | null } | undefined
+        .prepare('SELECT id, closed_at, requires_student_id FROM sessions WHERE session_key = ?')
+        .get(req.params.key) as { id: string; closed_at: string | null; requires_student_id: number } | undefined
       if (!session) return reply.code(404).send({ error: 'not_found' })
+
+      // Validate studentId if required by session
+      const requiresStudentId = session.requires_student_id === 1
+      const studentId = req.body.studentId ?? (req.body.state as { studentId?: string })?.studentId
+      if (requiresStudentId && !studentId?.trim()) {
+        return reply.code(400).send({ error: 'student_id_required' })
+      }
+
+      // Extract studentId from state if provided there (for backward compatibility)
+      const state = req.body.state as { studentId?: string }
+      const effectiveStudentId = studentId ?? state.studentId ?? null
 
       const stateJson = JSON.stringify(req.body.state)
       const now = new Date().toISOString()
@@ -247,8 +266,8 @@ export const sessionRoutes: FastifyPluginAsync = async (app: FastifyInstance) =>
           return reply.code(200).send({ ok: true, frozen: true })
         }
         db.prepare(
-          'UPDATE submissions SET state_json = ?, updated_at = ? WHERE id = ?',
-        ).run(stateJson, now, existing.id)
+          'UPDATE submissions SET state_json = ?, student_id = ?, updated_at = ? WHERE id = ?',
+        ).run(stateJson, effectiveStudentId, now, existing.id)
         return reply.code(200).send({
           ok: true,
           receipt: req.body.receipt,
@@ -273,9 +292,9 @@ export const sessionRoutes: FastifyPluginAsync = async (app: FastifyInstance) =>
           ).max_no ?? 0) + 1
         db.prepare(
           `INSERT INTO submissions
-             (id, session_id, participant_no, receipt_id, state_json, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ).run(randomUUID(), session.id, participantNo, receipt, stateJson, now, now)
+            (id, session_id, participant_no, receipt_id, state_json, student_id, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(randomUUID(), session.id, participantNo, receipt, stateJson, effectiveStudentId, now, now)
         db.exec('COMMIT')
       } catch (err) {
         db.exec('ROLLBACK')

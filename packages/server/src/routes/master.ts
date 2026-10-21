@@ -177,6 +177,7 @@ function buildSessionsCsv(rows: OverviewRow[]): string {
  * @property {string} session_id Internal session id.
  * @property {number} participant_no Sequential number within the session.
  * @property {string} state_json Serialized sort state.
+ * @property {string | null} student_id Optional student identifier/pseudonym.
  * @property {string} created_at ISO timestamp of the first submission.
  * @property {string} updated_at ISO timestamp of the last update.
  * @property {number} included `1` if submitted before closing, else `0`.
@@ -185,6 +186,7 @@ interface SubRow {
   session_id: string
   participant_no: number
   state_json: string
+  student_id: string | null
   created_at: string
   updated_at: string
   included: number
@@ -204,7 +206,7 @@ function submissionsForSessions(ids: string[]): SubRow[] {
   const placeholders = ids.map(() => '?').join(',')
   return db
     .prepare(
-      `SELECT sub.session_id, sub.participant_no, sub.state_json,
+      `SELECT sub.session_id, sub.participant_no, sub.state_json, sub.student_id,
               sub.created_at, sub.updated_at,
               CASE WHEN s.closed_at IS NULL OR sub.created_at <= s.closed_at
                    THEN 1 ELSE 0 END AS included

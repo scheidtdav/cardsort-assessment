@@ -54,7 +54,7 @@ function meta(sessions: ExportSession[]): CsvMeta {
  */
 export function metricsCsv(sessions: ExportSession[]): string {
   const usable = usableSchemas(cards, schemas)
-  const header = ['sitzung', 'nr', 'sprache', 'gruppen']
+  const header = ['sitzung', 'nr', 'student_id', 'sprache', 'gruppen']
   for (const s of usable) {
     header.push(`${s.key}_treffer`, `${s.key}_trenn`, `${s.key}_score`, `${s.key}_ari`)
   }
@@ -66,7 +66,7 @@ export function metricsCsv(sessions: ExportSession[]): string {
   const rows: CsvValue[][] = []
   for (const { sessionKey, analysis } of sessions) {
     for (const sub of analysis.submissions) {
-      const row: CsvValue[] = [sessionKey, sub.participantNo, sub.lang ?? 'de', sub.groupCount]
+      const row: CsvValue[] = [sessionKey, sub.participantNo, sub.studentId ?? '', sub.lang ?? 'de', sub.groupCount]
       for (const s of usable) {
         const r = sub.schemas[s.key]
         row.push(round(r.hitRate), round(r.separationRate), round(r.score), round(r.ari))
@@ -127,6 +127,7 @@ export function groupsJson(sessions: ExportSession[]) {
       sessionKey,
       submissions: analysis.submissions.map((sub) => ({
         participantNo: sub.participantNo,
+        studentId: sub.studentId,
         lang: sub.lang ?? 'de',
         ...sub.groups,
       })),

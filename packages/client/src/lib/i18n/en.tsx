@@ -67,6 +67,7 @@ export const en: Dict = {
     resetAsk: 'Reset everything?',
     resetConfirm: 'Yes, reset',
     cancel: 'Cancel',
+    loading: 'Loading...',
 
     msg: {
       ungrouped: (n: number) => `${n} ${n === 1 ? 'card' : 'cards'} still without a group`,
@@ -343,6 +344,7 @@ export const en: Dict = {
         no: 'No.',
         time: 'Time',
         groups: 'Groups',
+        studentId: 'Student ID',
         best: 'closest to',
         lead: 'Score',
         lang: 'Language',

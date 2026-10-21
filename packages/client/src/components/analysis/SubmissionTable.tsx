@@ -49,6 +49,7 @@ export function SubmissionTable({
   const columns: { key: ColKey; label: string }[] = [
     { key: 'time', label: t.ana.subs.col.time },
     { key: 'groups', label: t.ana.subs.col.groups },
+    { key: 'studentId', label: t.ana.subs.col.studentId },
     ...schemas.map((s) => ({ key: `score:${s.key}`, label: s.label[lang] })),
     ...(research ? schemas.map((s) => ({ key: `ari:${s.key}`, label: t.ana.subs.ari(s.label[lang]) })) : []),
     { key: 'best', label: t.ana.subs.col.best },
@@ -61,8 +62,8 @@ export function SubmissionTable({
         research
           ? columns.map((c) => c.key)
           : deep
-            ? ['groups', `score:${deep.key}`, 'best', 'lead']
-            : ['groups', ...schemas.map((s) => `score:${s.key}`), 'best'],
+            ? ['groups', 'studentId', `score:${deep.key}`, 'best', 'lead']
+            : ['groups', 'studentId', ...schemas.map((s) => `score:${s.key}`), 'best'],
       ),
   )
   /**
@@ -98,6 +99,7 @@ export function SubmissionTable({
     if (key === 'no') return s.participantNo
     if (key === 'time') return s.createdAt
     if (key === 'groups') return s.groupCount
+    if (key === 'studentId') return s.studentId ?? ''
     if (key === 'lead') return s.deepStructureLead ?? -Infinity
     const [kind, schema] = key.split(':')
     const r = s.schemas[schema]
@@ -160,6 +162,7 @@ export function SubmissionTable({
               {header('no', t.ana.subs.col.no)}
               {on('time') && header('time', t.ana.subs.col.time)}
               {on('groups') && header('groups', t.ana.subs.col.groups, true)}
+              {on('studentId') && <th>{t.ana.subs.col.studentId}</th>}
               {schemas.map((s) => on(`score:${s.key}`) && header(`score:${s.key}`, s.label[lang], true))}
               {schemas.map((s) => on(`ari:${s.key}`) && header(`ari:${s.key}`, t.ana.subs.ari(s.label[lang]), true))}
               {on('best') && <th>{t.ana.subs.col.best}</th>}
@@ -185,6 +188,7 @@ export function SubmissionTable({
                 </td>
                 {on('time') && <td>{formatDateTimeShort(s.createdAt, lang)}</td>}
                 {on('groups') && <td className="num">{s.groupCount}</td>}
+                {on('studentId') && <td>{s.studentId ?? ''}</td>}
                 {schemas.map(
                   (sc) =>
                     on(`score:${sc.key}`) && (
